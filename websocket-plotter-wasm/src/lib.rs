@@ -136,7 +136,7 @@ impl Chart {
 
             websocket_values.borrow_mut().pop().map( |v| {
                 let v: Values = serde_json::from_str(v.as_str()).unwrap();
-                console_log!("{}", v.value);
+                console_log!("{} hh", v.value);
             });
 
 
