@@ -1,8 +1,6 @@
 use wasm_bindgen::prelude::*;
 extern crate stdweb;
 use stdweb::web::{WebSocket, event::SocketMessageEvent, event::IMessageEvent, IEventTarget};
-extern crate rand;
-use rand::Rng;
 use plotters::prelude::*;
 use wasm_bindgen::JsCast;
 use std::cell::RefCell;
@@ -14,8 +12,6 @@ use chrono::prelude::*;
 extern crate console_error_panic_hook;
 use core::result::Result;
 use std::panic;
-
-use serde::{Deserialize, Serialize};
 
 #[macro_use]
 extern crate serde_derive;
@@ -57,16 +53,10 @@ pub type DrawResult<T> = Result<T, Box<dyn std::error::Error>>;
 pub struct Chart {
 }
 
-/// Result of screen to chart coordinates conversion.
-#[wasm_bindgen]
-pub struct Point {
-    pub x: f64,
-    pub y: f64,
-}
-
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Values {
-    pub value: u32,
+    pub time: f32,
+    pub value: f32,
 }
 
 fn window() -> web_sys::Window {
@@ -81,69 +71,62 @@ fn request_animation_frame(f: &Closure<dyn FnMut()>) {
 
 #[wasm_bindgen]
 impl Chart {
-    pub fn websocket_values(wsUrl: &str) -> Result<(), JsValue> {
-        console_log!("websocket");
+    pub fn websocket_values(ws_url: &str) -> Result<(), JsValue> {
         panic::set_hook(Box::new(console_error_panic_hook::hook));
-        let mut rng = rand::thread_rng();
-        let mut generated:Vec<f32> = (0..=1000)
-            .map(|x| rng.gen_range(-1.0, 1.0)).collect();
-        let mailbox = Mailbox::new(wsUrl);
-        Chart::draw(generated, mailbox.received_messages.clone())
-    }
-
-    fn draw(mut generated: Vec<f32>, websocket_values: Rc<RefCell<Vec<String>>>) -> Result<(), JsValue> {
-        console_log!("draw");
+        let mailbox = Mailbox::new(ws_url);
+        let websocket_values = mailbox.received_messages.clone();
+        let mut generated:Vec<(f32,f32)> = Vec::new();
         let f = Rc::new(RefCell::new(None));
         let g = f.clone();
         let mut last = Utc::now().timestamp_millis();
         let mut pos = 0;
+        let width = 50;
+        //Prepare closure for looping the animation
         *g.borrow_mut() = Some(Closure::wrap(Box::new(move || {
             let mut now = Utc::now().timestamp_millis();
+            websocket_values.borrow_mut().iter().for_each(|v| {
+                let v: Values = serde_json::from_str(v.as_str()).unwrap();
+                generated.push((v.time, v.value ));
+            });
+            websocket_values.borrow_mut().clear();
             if now - last > 100 {
                 last = now;
-
-                let backend = CanvasBackend::new("canvas").expect("cannot find canvas");
-                let root = backend.into_drawing_area();
-                let font: FontDesc = ("sans-serif", 20.0).into();
-
-                root.fill(&WHITE);
-
-                let mut chart = ChartBuilder::on(&root)
-                    .caption("Woohoo", font)
-                    .x_label_area_size(30)
-                    .y_label_area_size(30)
-                    .build_ranged(pos as f32..(pos + 49) as f32, -1f32..1f32).unwrap();
-
-                chart.configure_mesh().x_labels(10).y_labels(10).draw().unwrap();
-
-                let mut rng = rand::thread_rng();
-                let mut counter = 0;
-                let mut values1 = generated[pos..pos + 50]
-                    .iter()
-                    .map(|y| {
-                        counter += 1;
-                        ((pos - 1 + counter) as f32, *y)
-                    });
-
-                chart.draw_series(LineSeries::new(
-                    values1,
-                    &RED,
-                )).unwrap();
-
-                pos += 1;
-                root.present();
+                if((generated.len() - pos) > width) {
+                    Chart::draw_range(generated[pos..pos + width].to_vec(), width);
+                    pos += 1;
+                } else if(generated.len() > 2) {
+                    Chart::draw_range(generated.to_vec(), width);
+                }
             }
-
-            websocket_values.borrow_mut().pop().map( |v| {
-                let v: Values = serde_json::from_str(v.as_str()).unwrap();
-                console_log!("{} hh", v.value);
-            });
-
-
             request_animation_frame(f.borrow().as_ref().unwrap());
         }) as Box<dyn FnMut()>));
+
+        //Start the animation loop
         request_animation_frame(g.borrow().as_ref().unwrap());
         Ok(())
+    }
+
+    fn draw_range(mut data: Vec<(f32,f32)>, width: usize) {
+        let backend = CanvasBackend::new("canvas").expect("cannot find canvas");
+        let root = backend.into_drawing_area();
+        let font: FontDesc = ("sans-serif", 20.0).into();
+        root.fill(&WHITE);
+
+        let start = data.first().unwrap().0;
+
+        let mut chart = ChartBuilder::on(&root)
+            .caption("Woohoo", font)
+            .x_label_area_size(30)
+            .y_label_area_size(30)
+            .build_ranged(start .. (start + width as f32), -1f32..1f32).unwrap();
+
+        chart.configure_mesh().x_labels(10).y_labels(10).draw().unwrap();
+
+        chart.draw_series(LineSeries::new(
+            data,
+            &RED,
+        )).unwrap();
+        root.present();
     }
 }
 

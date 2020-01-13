@@ -25,7 +25,7 @@
   },
   "homepage": "https://github.com/38/plotters",
   "dependencies": {
-    "wasm-demo": "file:../pkg"
+    "websocket-plotter-wasm": "file:../pkg"
   },
   "devDependencies": {
     "webpack": "^4.29.3",

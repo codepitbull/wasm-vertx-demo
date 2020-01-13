@@ -21,16 +21,27 @@ object Main {
       .route("/static/*")
       .handler(StaticHandler.create().setCachingEnabled(false))
 
-    var ct = 0;
+
 
     val eventualServer = vertx
       .createHttpServer()
       .requestHandler(router)
       .webSocketHandler(ctx => {
-        vertx.setPeriodic(1000, _ => {
-          ct = ct + 1
-          ctx.writeTextMessage(JsonObject().put("value", ct).encode())
+        var ct = 0;
+        val r = scala.util.Random
+
+        val periodicId = vertx.setPeriodic(100, _ => {
+          ctx.writeTextMessage(JsonObject()
+            .put("time", ct.toFloat)
+            .put("value", r.between(-1.0f, 1.0f))
+            .encode())
+          ct += 1
         })
+
+        ctx.closeHandler(c => {
+          vertx.cancelTimer(periodicId);
+        })
+
       })
       .listenFuture(8666, "0.0.0.0")
 
