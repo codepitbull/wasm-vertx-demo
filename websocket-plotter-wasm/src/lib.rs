@@ -75,34 +75,34 @@ impl Chart {
         panic::set_hook(Box::new(console_error_panic_hook::hook));
         let mailbox = Mailbox::new(ws_url);
         let websocket_values = mailbox.received_messages.clone();
-        let mut generated:Vec<(f32,f32)> = Vec::new();
-        let f = Rc::new(RefCell::new(None));
-        let g = f.clone();
+        let mut received_values:Vec<(f32, f32)> = Vec::new();
+        let referenc_counter_for_closure = Rc::new(RefCell::new(None));
+        let reference_for_starting_render_loop = referenc_counter_for_closure.clone();
         let mut last = Utc::now().timestamp_millis();
         let mut pos = 0;
         let width = 50;
         //Prepare closure for looping the animation
-        *g.borrow_mut() = Some(Closure::wrap(Box::new(move || {
+        *reference_for_starting_render_loop.borrow_mut() = Some(Closure::wrap(Box::new(move || {
             let mut now = Utc::now().timestamp_millis();
             websocket_values.borrow_mut().iter().for_each(|v| {
                 let v: Values = serde_json::from_str(v.as_str()).unwrap();
-                generated.push((v.time, v.value ));
+                received_values.push((v.time, v.value ));
             });
             websocket_values.borrow_mut().clear();
             if now - last > 100 {
                 last = now;
-                if((generated.len() - pos) > width) {
-                    Chart::draw_range(generated[pos..pos + width].to_vec(), width);
+                if((received_values.len() - pos) > width) {
+                    Chart::draw_range(received_values[pos..pos + width].to_vec(), width);
                     pos += 1;
-                } else if(generated.len() > 2) {
-                    Chart::draw_range(generated.to_vec(), width);
+                } else if(received_values.len() > 2) {
+                    Chart::draw_range(received_values.to_vec(), width);
                 }
             }
-            request_animation_frame(f.borrow().as_ref().unwrap());
+            request_animation_frame(referenc_counter_for_closure.borrow().as_ref().unwrap());
         }) as Box<dyn FnMut()>));
 
         //Start the animation loop
-        request_animation_frame(g.borrow().as_ref().unwrap());
+        request_animation_frame(reference_for_starting_render_loop.borrow().as_ref().unwrap());
         Ok(())
     }
 
