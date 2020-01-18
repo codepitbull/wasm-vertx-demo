@@ -53,16 +53,19 @@ pub type DrawResult<T> = Result<T, Box<dyn std::error::Error>>;
 pub struct Chart {
 }
 
+//JSON object being sent from Vert.x
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Values {
     pub time: f32,
     pub value: f32,
 }
 
+//Get the window for rendering
 fn window() -> web_sys::Window {
     web_sys::window().expect("no global `window` exists")
 }
 
+//Schedule a closure to be executed with a new animation frame
 fn request_animation_frame(f: &Closure<dyn FnMut()>) {
     window()
         .request_animation_frame(f.as_ref().unchecked_ref())
@@ -71,34 +74,50 @@ fn request_animation_frame(f: &Closure<dyn FnMut()>) {
 
 #[wasm_bindgen]
 impl Chart {
+
+    //Connect with a websocket to the given url to receive the values to be rendered
     pub fn websocket_values(ws_url: &str) -> Result<(), JsValue> {
+        console_log!("Connecting to {} and rendering results in plot", ws_url);
+        //Add hook for reporting failures to the console ... an real life saver
         panic::set_hook(Box::new(console_error_panic_hook::hook));
+
         let mailbox = Mailbox::new(ws_url);
         let websocket_values = mailbox.received_messages.clone();
         let mut received_values:Vec<(f32, f32)> = Vec::new();
-        let referenc_counter_for_closure = Rc::new(RefCell::new(None));
-        let reference_for_starting_render_loop = referenc_counter_for_closure.clone();
-        let mut last = Utc::now().timestamp_millis();
-        let mut pos = 0;
+        let reference_counter_for_closure = Rc::new(RefCell::new(None));
+        let reference_for_starting_render_loop = reference_counter_for_closure.clone();
+        let mut time_of_last_animation_frame = Utc::now().timestamp_millis();
+        let mut index_in_values = 0;
         let width = 50;
+
         //Prepare closure for looping the animation
         *reference_for_starting_render_loop.borrow_mut() = Some(Closure::wrap(Box::new(move || {
             let mut now = Utc::now().timestamp_millis();
+
             websocket_values.borrow_mut().iter().for_each(|v| {
+                //deserialize values sent from Vert.x
                 let v: Values = serde_json::from_str(v.as_str()).unwrap();
+
+                //push values into the storage vector
                 received_values.push((v.time, v.value ));
             });
+
+            //clear stored values after processing
             websocket_values.borrow_mut().clear();
-            if now - last > 100 {
-                last = now;
-                if((received_values.len() - pos) > width) {
-                    Chart::draw_range(received_values[pos..pos + width].to_vec(), width);
-                    pos += 1;
-                } else if(received_values.len() > 2) {
+            if now - time_of_last_animation_frame > 100 {
+                time_of_last_animation_frame = now;
+
+                //start moving the when we have more values than the plot is wide
+                if (received_values.len() - index_in_values) > width {
+                    Chart::draw_range(received_values[index_in_values..index_in_values + width].to_vec(), width);
+                    index_in_values += 1;
+                } else if received_values.len() > 2 {
                     Chart::draw_range(received_values.to_vec(), width);
                 }
             }
-            request_animation_frame(referenc_counter_for_closure.borrow().as_ref().unwrap());
+
+            //reschedule drawing
+            request_animation_frame(reference_counter_for_closure.borrow().as_ref().unwrap());
         }) as Box<dyn FnMut()>));
 
         //Start the animation loop
@@ -106,14 +125,15 @@ impl Chart {
         Ok(())
     }
 
-    fn draw_range(mut data: Vec<(f32,f32)>, width: usize) {
+    fn draw_range(data: Vec<(f32,f32)>, width: usize) {
         let backend = CanvasBackend::new("canvas").expect("cannot find canvas");
         let root = backend.into_drawing_area();
         let font: FontDesc = ("sans-serif", 20.0).into();
-        root.fill(&WHITE);
+        root.fill(&WHITE).unwrap();
 
         let start = data.first().unwrap().0;
 
+        //build the cart for rendering
         let mut chart = ChartBuilder::on(&root)
             .caption("Woohoo", font)
             .x_label_area_size(30)
@@ -126,7 +146,9 @@ impl Chart {
             data,
             &RED,
         )).unwrap();
-        root.present();
+
+        //reveal the drawn plot
+        root.present().unwrap();
     }
 }
 
@@ -153,9 +175,5 @@ impl Mailbox {
         socket.add_event_listener(closure);
 
         return Mailbox { socket, received_messages }
-    }
-
-    fn check_length (&mut self) -> usize {
-        self.received_messages.borrow_mut().len()
     }
 }
