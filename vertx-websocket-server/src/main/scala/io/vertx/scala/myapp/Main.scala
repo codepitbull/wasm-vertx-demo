@@ -13,17 +13,12 @@ object Main {
     implicit val exc:VertxExecutionContext = VertxExecutionContext(vertx.getOrCreateContext())
 
     val router = Router.router(vertx)
-    router
-      .get("/hello")
-      .handler(_.response().end("world"))
 
     router
       .route("/static/*")
       .handler(StaticHandler.create().setCachingEnabled(false))
 
-
-
-    val eventualServer = vertx
+    val serverFuture = vertx
       .createHttpServer()
       .requestHandler(router)
       .webSocketHandler(ctx => {
@@ -45,7 +40,7 @@ object Main {
       })
       .listenFuture(8666, "0.0.0.0")
 
-    eventualServer.onComplete {
+    serverFuture.onComplete {
       case Success(_) => println("Done")
       case Failure(t) => println("An error has occurred: " + t.getMessage)
     }

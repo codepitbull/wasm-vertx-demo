@@ -1,6 +1,8 @@
-You need [wasm-pack](https://rustwasm.github.io/docs/book/game-of-life/setup.html).
+# Prerequisites
+Get Rust up and going, then get [wasm-pack](https://rustwasm.github.io/wasm-pack/installer/).
 
-wasm-pack build --target web
-
-wasm-pack build --target web --out-dir ../vertx-websocket-server/src/main/resources/webroot/pkg
+## Building
+Taking some shortcuts here:
+The following command will build the whole thing and put it into the webroot of the websocket-server:
+```wasm-pack build --target web --out-dir ../vertx-websocket-server/src/main/resources/webroot/pkg```
 
