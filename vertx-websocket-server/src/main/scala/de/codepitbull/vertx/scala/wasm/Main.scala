@@ -1,4 +1,4 @@
-package io.vertx.scala.myapp
+package de.codepitbull.vertx.scala.wasm
 
 import io.vertx.ext.web.handler.StaticHandler
 import io.vertx.lang.scala.VertxExecutionContext

@@ -1,4 +1,4 @@
-package io.vertx.scala.myapp
+package de.codepitbull.vertx.scala.wasm
 
 import java.util.concurrent.Executors
 
