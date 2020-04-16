@@ -5,10 +5,9 @@ use plotters::prelude::*;
 use wasm_bindgen::JsCast;
 use std::cell::RefCell;
 use std::rc::Rc;
-//chrono is required since std::time doesnÄ't currently work in wasm
+//chrono is required since std::time doesn't currently work in wasm
 extern crate chrono;
 use chrono::prelude::*;
-//extern crate quicksilver;
 extern crate console_error_panic_hook;
 use core::result::Result;
 use std::panic;
